@@ -11,7 +11,7 @@ A small Chrome Manifest V3 extension that shows the active STRATUS company and s
 5. Select the unzipped extension folder.
 6. Open or refresh STRATUS.
 
-The badge appears toward the right side of the black navigation bar, with room reserved for the account icons, in this format:
+The badge appears immediately to the left of the STRATUS chat-bubble icon in this format:
 
 `COMPANY  Silicon Valley Mechanical  |  STATION  Admin_Kyle McCabe`
 
@@ -20,6 +20,19 @@ When no station is signed in, it displays:
 `COMPANY  Silicon Valley Mechanical  |  STATION  Not signed in`
 
 The badge is anchored to the top of the webpage, not the browser viewport. It scrolls away with the top navigation instead of following you down the page.
+
+## Chat-icon positioning
+
+Version 1.1.5 finds the chat-bubble control in the live page DOM and measures its screen position. The badge's right edge is placed 30 pixels to the left of that icon. Its vertical center is matched to the icon's vertical center, placing the badge in the top-to-bottom middle of the black navigation bar.
+
+The position is recalculated when:
+
+- STRATUS finishes rendering its top navigation.
+- The page DOM changes.
+- The browser window is resized or zoom changes the layout.
+- A page is restored from the browser back-forward cache.
+
+If the chat control cannot be identified, the extension falls back to the previous reserved right-side position.
 
 ## Fresh detection behavior
 
@@ -65,12 +78,8 @@ Manual overrides intentionally take precedence over fresh detection until they a
 
 ## Position adjustment
 
-The badge defaults to the right side of the top bar and reserves space for the account icons. It uses `position: absolute`, so it does not follow the viewport while scrolling. To move it, edit the `.badge` CSS inside `content.js`.
+The badge uses `position: absolute`, so it stays at the top of the webpage and scrolls away with the navigation. Its horizontal position is normally calculated from the chat icon rather than from a fixed CSS offset.
 
-Examples:
-
-- Farther left: increase the minimum and maximum values in `right: clamp(185px, 15vw, 235px);`
-- Farther right: decrease those values, but leave enough room for the account icons
-- Near the left navigation: use `left: 500px; right: auto; transform: none;`
+The chat-icon gap is controlled by `CHAT_ICON_GAP_PX` in `content.js` and is set to 30 pixels. When the icon is found, the badge's `top` position is calculated from the icon center. `FALLBACK_RIGHT_OFFSET_PX` and `FALLBACK_TOP_PX` are used only when the chat icon cannot be found.
 
 After editing, reload the extension from `chrome://extensions`.

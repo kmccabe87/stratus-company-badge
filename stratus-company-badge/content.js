@@ -3,6 +3,9 @@
 
   const HOST_ID = "svm-stratus-company-badge-host";
   const MANUAL_STORAGE_KEYS = ["manualCompany", "manualStation"];
+  const CHAT_ICON_GAP_PX = 30;
+  const FALLBACK_RIGHT_OFFSET_PX = 225;
+  const FALLBACK_TOP_PX = 7;
 
   const COMPANY_LABEL_PATTERN = /^signed\s+into\s*:?\s*$/i;
   const COMPANY_INLINE_PATTERN = /^signed\s+into(?!\s+station\b)\s*:?\s+(.+)$/i;
@@ -17,9 +20,11 @@
   const NOT_DETECTED_TEXT = "Not detected";
 
   let shadowRoot = null;
+  let badgeElement = null;
   let companyValueElement = null;
   let stationValueElement = null;
   let mutationTimer = null;
+  let badgePositionTimer = null;
   let lastMenuProbeAt = 0;
   let detectionRunning = false;
   let unknownText = UNKNOWN_TEXT;
@@ -81,9 +86,9 @@
 
         .badge {
           position: absolute;
-          top: 5px;
+          top: 7px;
           left: auto;
-          right: clamp(185px, 15vw, 235px);
+          right: 225px;
           transform: none;
           z-index: 2147483647;
           display: inline-flex;
@@ -144,7 +149,6 @@
 
         @media (max-width: 1050px) {
           .badge {
-            right: 175px;
             max-width: calc(100vw - 390px);
           }
         }
@@ -158,6 +162,7 @@
 
       const badge = document.createElement("div");
       badge.className = "badge";
+      badgeElement = badge;
 
       const companyField = document.createElement("span");
       companyField.className = "field";
@@ -196,11 +201,206 @@
       shadowRoot.append(style, badge);
     } else if (!shadowRoot) {
       shadowRoot = host.shadowRoot;
+      badgeElement = shadowRoot?.querySelector(".badge") ?? null;
       companyValueElement = shadowRoot?.querySelector('[data-field="company"]') ?? null;
       stationValueElement = shadowRoot?.querySelector('[data-field="station"]') ?? null;
     }
 
     return host;
+  }
+
+  function descriptorForElement(element) {
+    if (!element) return "";
+
+    const attributes = [
+      "aria-label",
+      "title",
+      "alt",
+      "data-original-title",
+      "data-bs-original-title",
+      "data-tooltip",
+      "id",
+      "class"
+    ];
+
+    const parts = [];
+    const elements = [element, ...element.querySelectorAll("i, svg, img, span")].slice(0, 12);
+
+    for (const candidate of elements) {
+      for (const attribute of attributes) {
+        const value = attribute === "class"
+          ? (typeof candidate.className === "string" ? candidate.className : candidate.getAttribute("class"))
+          : candidate.getAttribute(attribute);
+        if (value) parts.push(value);
+      }
+    }
+
+    return normalizeText(parts.join(" ")).toLowerCase();
+  }
+
+  function isChatDescriptor(descriptor) {
+    return /(?:^|[\s_-])(chat|message|messages|comment|comments|conversation|feedback|forum|speech)(?:$|[\s_-])/i.test(
+      descriptor
+    );
+  }
+
+  function collectTopBarIconCandidates() {
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const selector = [
+      "a",
+      "button",
+      '[role="button"]',
+      "[onclick]",
+      ".dropdown-toggle"
+    ].join(",");
+
+    const raw = [...new Set(document.querySelectorAll(selector))];
+    const candidates = [];
+
+    for (const element of raw) {
+      if (!(element instanceof HTMLElement)) continue;
+
+      const rect = element.getBoundingClientRect();
+      if (
+        rect.width < 10 ||
+        rect.height < 10 ||
+        rect.width > 82 ||
+        rect.height > 62 ||
+        rect.bottom < 0 ||
+        rect.top > 58 ||
+        rect.right < viewportWidth * 0.45
+      ) {
+        continue;
+      }
+
+      const style = window.getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) {
+        continue;
+      }
+
+      const descriptor = descriptorForElement(element);
+      const explicitChat = isChatDescriptor(descriptor);
+      const visibleText = normalizeText(element.innerText);
+      const hasIcon = Boolean(
+        element.matches("img, svg, i") ||
+        element.querySelector("img, svg, i") ||
+        /(?:^|[\s_-])(icon|fa|fas|far|fal|glyphicon|material-icons)(?:$|[\s_-])/i.test(descriptor)
+      );
+
+      // Text navigation items such as Admin are not part of the account-icon cluster.
+      if (!explicitChat && visibleText.length > 3) continue;
+      if (!explicitChat && !hasIcon) continue;
+
+      candidates.push({ element, rect, descriptor, explicitChat });
+    }
+
+    candidates.sort((a, b) => a.rect.left - b.rect.left || a.rect.width - b.rect.width);
+
+    // Several icon libraries make both a wrapper and its child clickable. Keep one
+    // representative for each visual rectangle so spacing calculations stay accurate.
+    const unique = [];
+    for (const candidate of candidates) {
+      const duplicateIndex = unique.findIndex((existing) => {
+        const centerDistance = Math.abs(
+          existing.rect.left + existing.rect.width / 2 -
+          (candidate.rect.left + candidate.rect.width / 2)
+        );
+        const verticalDistance = Math.abs(
+          existing.rect.top + existing.rect.height / 2 -
+          (candidate.rect.top + candidate.rect.height / 2)
+        );
+        return centerDistance < 3 && verticalDistance < 3;
+      });
+
+      if (duplicateIndex < 0) {
+        unique.push(candidate);
+      } else if (candidate.explicitChat && !unique[duplicateIndex].explicitChat) {
+        unique[duplicateIndex] = candidate;
+      }
+    }
+
+    return unique;
+  }
+
+  function findChatIconAnchor() {
+    const candidates = collectTopBarIconCandidates();
+    if (!candidates.length) return { anchor: null, candidates: [] };
+
+    const explicit = candidates
+      .filter((candidate) => candidate.explicitChat)
+      .sort((a, b) => b.rect.right - a.rect.right);
+
+    if (explicit.length) {
+      return { anchor: explicit[0], candidates };
+    }
+
+    // Fallback: the chat bubble is the leftmost item in STRATUS's compact
+    // top-right icon cluster. Build that cluster from the right edge inward.
+    const byRightEdge = [...candidates].sort((a, b) => b.rect.right - a.rect.right);
+    const cluster = [byRightEdge[0]];
+
+    for (let i = 1; i < byRightEdge.length; i += 1) {
+      const candidate = byRightEdge[i];
+      const leftmost = cluster.reduce(
+        (current, item) => item.rect.left < current.rect.left ? item : current,
+        cluster[0]
+      );
+      const horizontalGap = leftmost.rect.left - candidate.rect.right;
+      const candidateCenterY = candidate.rect.top + candidate.rect.height / 2;
+      const clusterCenterY = leftmost.rect.top + leftmost.rect.height / 2;
+
+      if (horizontalGap >= -4 && horizontalGap <= 30 && Math.abs(candidateCenterY - clusterCenterY) <= 14) {
+        cluster.push(candidate);
+      } else if (horizontalGap > 30) {
+        break;
+      }
+    }
+
+    cluster.sort((a, b) => a.rect.left - b.rect.left);
+    return {
+      anchor: cluster.length >= 2 ? cluster[0] : null,
+      candidates
+    };
+  }
+
+  function positionBadgeBesideChatIcon() {
+    ensureBadge();
+    if (!badgeElement) return;
+
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const { anchor } = findChatIconAnchor();
+
+    if (!anchor) {
+      badgeElement.style.right = `${FALLBACK_RIGHT_OFFSET_PX}px`;
+      badgeElement.style.top = `${FALLBACK_TOP_PX}px`;
+      badgeElement.dataset.anchor = "fallback";
+      badgeElement.dataset.verticalAnchor = "fallback";
+      return;
+    }
+
+    const badgeRightEdge = anchor.rect.left - CHAT_ICON_GAP_PX;
+    const rightOffset = Math.max(8, Math.round(viewportWidth - badgeRightEdge));
+
+    // Match the badge's vertical center to the chat icon's vertical center.
+    // scrollY converts the viewport-relative icon rectangle into a page-relative
+    // coordinate, so the absolutely positioned badge still scrolls away with the bar.
+    const badgeHeight = badgeElement.getBoundingClientRect().height;
+    const anchorCenterY = window.scrollY + anchor.rect.top + anchor.rect.height / 2;
+    const badgeTop = Math.max(0, Math.round(anchorCenterY - badgeHeight / 2));
+
+    badgeElement.style.left = "auto";
+    badgeElement.style.right = `${rightOffset}px`;
+    badgeElement.style.top = `${badgeTop}px`;
+    badgeElement.dataset.anchor = "chat-icon";
+    badgeElement.dataset.verticalAnchor = "chat-icon-center";
+    badgeElement.dataset.spacing = String(CHAT_ICON_GAP_PX);
+  }
+
+  function scheduleBadgePositioning(delayMilliseconds = 0) {
+    window.clearTimeout(badgePositionTimer);
+    badgePositionTimer = window.setTimeout(() => {
+      window.requestAnimationFrame(positionBadgeBesideChatIcon);
+    }, delayMilliseconds);
   }
 
   function setDisplayedValue(element, value, fallback, status) {
@@ -533,6 +733,7 @@
     const observer = new MutationObserver(() => {
       window.clearTimeout(mutationTimer);
       mutationTimer = window.setTimeout(() => detectDetails({ mayOpenMenu: false }), 350);
+      scheduleBadgePositioning(100);
     });
 
     observer.observe(document.documentElement, {
@@ -550,7 +751,14 @@
   async function initialize() {
     ensureBadge();
     startMutationObserver();
+    scheduleBadgePositioning();
     await resetAndDetectFresh();
+
+    // Re-measure after STRATUS finishes rendering its icon row. This keeps the
+    // badge aligned through different window sizes, zoom levels, and accounts.
+    window.setTimeout(() => scheduleBadgePositioning(), 350);
+    window.setTimeout(() => scheduleBadgePositioning(), 1200);
+    window.setTimeout(() => scheduleBadgePositioning(), 2500);
 
     // Give slower STRATUS pages a second fresh attempt after the navigation
     // and account controls have finished rendering.
@@ -558,8 +766,15 @@
   }
 
   window.addEventListener("pageshow", (event) => {
+    scheduleBadgePositioning();
     if (event.persisted) resetAndDetectFresh();
   });
+
+  window.addEventListener("resize", () => scheduleBadgePositioning(80));
+
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => scheduleBadgePositioning());
+  }
 
   initialize();
 })();

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "STRATUS Company & Station Badge",
-  "version": "1.1.2",
-  "description": "Shows the current STRATUS company and freshly detected signed-in station in the top navigation bar.",
+  "version": "1.1.5",
+  "description": "Shows the current STRATUS company and station 30 pixels left of, and vertically centered on, the chat icon.",
   "permissions": [
     "storage"
   ],
