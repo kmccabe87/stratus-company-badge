@@ -1,85 +1,100 @@
 # STRATUS Company & Station Badge
 
-A small Chrome Manifest V3 extension that shows the active STRATUS company and signed-in station in the top black navigation bar.
+![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-4285F4)
+![Version](https://img.shields.io/badge/version-1.2.0-2F6EA8)
+![License](https://img.shields.io/badge/license-MIT-5b9bd5)
+
+A small Chrome Manifest V3 extension that shows your active STRATUS company and signed-in station in the top navigation bar of [gtpstratus.com](https://gtpstratus.com).
+
+```
+COMPANY  Silicon Valley Mechanical  |  STATION  Admin_Kyle McCabe
+```
+
+When no station is signed in, the station side displays **Not signed in**.
+
+## Features
+
+- **Live badge** — anchored 30 px to the left of the STRATUS chat-bubble icon, vertically centered on it, and scrolling with the top navigation.
+- **Fresh detection** — re-runs on every refresh, new tab, and back/forward-cache restore; never shows a value cached by another tab.
+- **Smart menu reading** — finds the `Signed into` and `Signed into station` labels in the account menu and best-effort opens/closes the menu in the background.
+- **Manual overrides** — set a company and/or station by hand from the extension popup at any time.
+- **Private by design** — runs only on `gtpstratus.com`, makes no network requests, and stores only detected/entered names in your local Chrome profile.
+
+## Requirements
+
+- Chrome or any Chromium-based browser that supports Manifest V3 extensions.
+- A STRATUS account (badge data comes from the STRATUS user menu).
 
 ## Install
 
-1. Unzip this package.
+1. Clone this repository:
+
+   ```powershell
+   git clone https://github.com/kmccabe87/stratus-company-badge.git
+   ```
+
 2. Open `chrome://extensions` in Chrome.
-3. Turn on **Developer mode**.
+3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked**.
-5. Select the unzipped extension folder.
+5. Select the cloned `stratus-company-badge` folder.
 6. Open or refresh STRATUS.
 
-The badge appears immediately to the left of the STRATUS chat-bubble icon in this format:
-
-`COMPANY  Silicon Valley Mechanical  |  STATION  Admin_Kyle McCabe`
-
-When no station is signed in, it displays:
-
-`COMPANY  Silicon Valley Mechanical  |  STATION  Not signed in`
-
-The badge is anchored to the top of the webpage, not the browser viewport. It scrolls away with the top navigation instead of following you down the page.
-
-## Chat-icon positioning
-
-Version 1.1.5 finds the chat-bubble control in the live page DOM and measures its screen position. The badge's right edge is placed 30 pixels to the left of that icon. Its vertical center is matched to the icon's vertical center, placing the badge in the top-to-bottom middle of the black navigation bar.
-
-The position is recalculated when:
-
-- STRATUS finishes rendering its top navigation.
-- The page DOM changes.
-- The browser window is resized or zoom changes the layout.
-- A page is restored from the browser back-forward cache.
-
-If the chat control cannot be identified, the extension falls back to the previous reserved right-side position.
-
-## Fresh detection behavior
-
-Version 1.1.2 performs a fresh account-menu check whenever:
-
-- STRATUS is refreshed.
-- STRATUS is opened in a new tab.
-- A page is restored from the browser back-forward cache.
-
-The badge no longer starts by displaying a station cached by another page or tab. It temporarily shows **Detecting…**, opens and closes the account menu in the background, and then displays the current result.
-
-STRATUS omits the **Signed into station** section when no station is active. When the extension confirms that the account menu is open and that section is absent, it clears the previously detected station and displays **Not signed in**.
+To update after pulling new changes, click **Reload** on the extension card and refresh STRATUS (`Ctrl+R`).
 
 ## How detection works
 
-- The extension looks for the exact **Signed into** label in the STRATUS user menu.
-- It also looks for the **Signed into station** label.
-- It reads the value immediately following each label.
-- If the menu is not yet in the page, the extension makes a best-effort attempt to open and close it.
-- The current page/tab maintains its own fresh detection state.
-- The latest confirmed result is stored in `chrome.storage.local` for display in the extension popup, but the top badge does not trust that cached result after a refresh or in a new tab.
-- A MutationObserver re-checks the page when the user opens the account menu manually or STRATUS updates the page.
+- The extension looks for the exact **Signed into** label (company) and the **Signed into station** label in the STRATUS user menu, then reads the value that follows each label.
+- STRATUS omits the **Signed into station** section when no station is active; once the menu is confirmed open and the section is absent, the badge shows **Not signed in**.
+- Each page/tab keeps its own detection state. The latest confirmed result is stored in `chrome.storage.local` so the extension popup can display it, but the top badge always re-checks on a fresh page.
+- A `MutationObserver` re-checks when you open the account menu manually or STRATUS updates the page.
+
+## Badge positioning
+
+The chat-bubble control is located in the live DOM and measured on screen; the badge's right edge sits 30 px left of it, vertically centered. The position is recalculated when STRATUS finishes rendering, the DOM changes, the window is resized or zoomed, or a page is restored from the back/forward cache.
+
+If the chat control cannot be identified, the badge falls back to a reserved right-side position.
 
 ## Manual overrides
 
-Click the extension's toolbar icon to enter a company, a station, or both manually. Select **Use auto-detect** to remove both overrides and return to automatic detection.
+Click the extension's toolbar icon to enter a company, a station, or both. **Use auto-detect** removes both overrides and returns to automatic detection. Manual overrides take precedence until removed.
 
-Manual overrides intentionally take precedence over fresh detection until they are removed.
+## Troubleshooting
 
-## Privacy and scope
+1. Reload the extension from `chrome://extensions` after replacing its files.
+2. Refresh STRATUS with `Ctrl+R`.
+3. If automatic menu opening is blocked by a future STRATUS page change, open the user menu once — the observer reads it immediately.
+4. As a last resort, enter the values through the extension popup.
 
-- The extension runs only on `gtpstratus.com` and its subdomains.
-- It makes no external network requests.
-- It stores only the detected or manually entered company and station names in the local Chrome profile.
+## Configuration
 
-## If the badge does not update
+Tuning constants live at the top of [`content.js`](content.js):
 
-1. Open `chrome://extensions`.
-2. Click **Reload** on the extension card after replacing its files.
-3. Refresh STRATUS with `Ctrl+R`.
-4. If automatic opening is blocked by a future STRATUS page change, open the user menu once. The MutationObserver will read it immediately.
-5. As a fallback, enter the values through the extension popup.
-
-## Position adjustment
-
-The badge uses `position: absolute`, so it stays at the top of the webpage and scrolls away with the navigation. Its horizontal position is normally calculated from the chat icon rather than from a fixed CSS offset.
-
-The chat-icon gap is controlled by `CHAT_ICON_GAP_PX` in `content.js` and is set to 30 pixels. When the icon is found, the badge's `top` position is calculated from the icon center. `FALLBACK_RIGHT_OFFSET_PX` and `FALLBACK_TOP_PX` are used only when the chat icon cannot be found.
+| Constant | Purpose | Default |
+| --- | --- | --- |
+| `CHAT_ICON_GAP_PX` | Gap between the badge's right edge and the chat icon | `30` |
+| `FALLBACK_RIGHT_OFFSET_PX` | Right offset used only when the chat icon is not found | `225` |
+| `FALLBACK_TOP_PX` | Top offset used only when the chat icon is not found | `7` |
 
 After editing, reload the extension from `chrome://extensions`.
+
+## Project layout
+
+```
+stratus-company-badge/
+├── manifest.json    # Extension manifest (MV3)
+├── content.js       # Badge rendering, positioning, and detection
+├── popup.html       # Toolbar popup markup
+├── popup.css        # Toolbar popup styling
+├── popup.js         # Manual override storage UI
+└── icons/           # Extension icons (SVG)
+```
+
+## Privacy & scope
+
+- Content script injected only on `https://gtpstratus.com/*` and its subdomains.
+- Sole permission: `storage` (local profile storage for detected values and overrides).
+- No external network requests. No analytics.
+
+## License
+
+[MIT](LICENSE) © Kyle McCabe

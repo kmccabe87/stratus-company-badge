@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STRATUS Company &amp; Station Badge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>STRATUS Company &amp; Station Badge</h1>
+
+    <section class="status">
+      <span class="label">Currently displayed</span>
+      <div class="current-row">
+        <span>Company</span>
+        <strong id="currentCompany">Not detected yet</strong>
+      </div>
+      <div class="current-row">
+        <span>Station</span>
+        <strong id="currentStation">Not detected yet</strong>
+      </div>
+    </section>
+
+    <label for="manualCompany">Company override</label>
+    <input
+      id="manualCompany"
+      type="text"
+      maxlength="120"
+      placeholder="Example: Silicon Valley Mechanical"
+      autocomplete="organization"
+    >
+
+    <label for="manualStation" class="second-label">Station override</label>
+    <input
+      id="manualStation"
+      type="text"
+      maxlength="120"
+      placeholder="Example: Admin_Kyle McCabe"
+      autocomplete="off"
+    >
+
+    <div class="buttons">
+      <button id="saveButton" type="button">Save overrides</button>
+      <button id="clearButton" type="button" class="secondary">Use auto-detect</button>
+    </div>
+
+    <p id="message" role="status"></p>
+    <p class="note">
+      Auto-detect reads both “Signed into” values from the STRATUS user menu and stores them only in this browser.
+    </p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
